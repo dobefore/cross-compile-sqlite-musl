@@ -5,5 +5,6 @@ tar -zxvf sqlite-autoconf-3390400.tar.gz -C .
 
 mkdir -p $HOME/sql
 cd sqlite-autoconf-3390400
-./configure CC=$HOME/rpitools/arm-bcm2708/arm-rpi-4.9.3-linux-gnueabihf/bin/arm-linux-gnueabihf-gcc  --host=aarch64 --prefix=$HOME/sql
+export PATH="$HOME/aarch64-linux-musl-cross/bin:$PATH"
+./configure CC=aarch64-linux-musl-gcc  --host=aarch64 --prefix=$HOME/sql
 make && make install
