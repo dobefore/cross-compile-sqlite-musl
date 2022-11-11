@@ -1,0 +1,153 @@
+name: Create Release Draft
+# git push origin 0.5.3 to push local to remote
+on:
+  workflow_dispatch:
+  push:
+    tags: ["[0-9]+.[0-9]+.[0-9]+*"]
+
+jobs:
+  armv6:
+    # cross compile
+    name: Build armv6
+    runs-on: ubuntu-latest
+    # after every step is finished,exporting to PATH will be clear,so in next step ,need re-export
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+
+       # used to cross compile openssl and sqlite
+      - name: Download cross-compile toolchains gnu 
+        run: |
+          git clone --depth 1 https://github.com/raspberrypi/tools.git $HOME/rpitools
+          export PATH="$HOME/rpitools/arm-bcm2708/arm-rpi-4.9.3-linux-gnueabihf/bin:$PATH"
+          arm-linux-gnueabihf-gcc -v
+
+      - name: Compile sqlite3
+        run: sh arm.sh
+
+      - name: Create output directory
+        run: mkdir output
+
+      - name: Copy files to output
+        run: cp -r $HOME/sql output/
+         
+      - name: Upload artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: armv6
+          path: output/*
+  arm64:
+  # cross compile
+    name: Build arm64
+    runs-on: ubuntu-latest
+    # after every step is finished,exporting to PATH will be clear,so in next step ,need re-export
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Add cargo taget arm64
+        run: rustup target add aarch64-unknown-linux-musl
+      #with musl c
+      - uses: robinraju/release-downloader@v1.4
+        with:
+          repository: "dobefore/musl-cross"
+          tag: "0.1.0"
+          fileName: "aarch64-linux-musl-cross.tgz"
+      - name: Copy musl-cross to home
+        run: cp aarch64-linux-musl-cross.tgz $HOME
+      # - name: Download cross-compile toolchain muslc
+      #   run: wget  -P $HOME https://musl.cc/aarch64-linux-musl-cross.tgz
+
+      - name: unpack cross-compile toolchains musl
+        run: tar -zxvf $HOME/aarch64-linux-musl-cross.tgz -C $HOME
+
+      - name: Compile sqlite3
+        run: sh ./arm64.sh
+  
+      - name: Create output directory
+        run: mkdir output
+
+      - name: Copy files to output
+        run: cp -r $HOME/sql output/
+         
+      - name: Upload artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: arm64
+          path: output/*
+
+
+  release:
+    name: Publish Release
+    runs-on: ubuntu-latest
+    needs:
+      - armv6
+      - arm64
+      
+      # above line should be added in run part below after windows item.
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Determine Release Info
+        id: info
+        env:
+          GITHUB_REF: ${{ github.ref }}
+        run: |
+          sh ./rename_version.sh
+      - name: Create Release Draft
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: ${{ steps.info.outputs.version }} Release
+          draft: true
+      
+      - name: Create arm64 Directory
+        run: mkdir -p ${{ steps.info.outputs.arm64dir }}
+
+      - name: Download arm64 Artifacts
+        uses: actions/download-artifact@v2
+        with:
+          name: arm64
+          path: ${{ steps.info.outputs.arm64dir }}
+
+      # - name: Restore arm64 File Modes
+      #   run: |
+      #     chmod 755 ${{ steps.info.outputs.arm64dir }}/bcdown*
+      - name: Create arm64 tarball
+        run: tar -zcvf ${{ steps.info.outputs.arm64dir }}.tar.gz ${{ steps.info.outputs.arm64dir }}
+
+      - name: Upload arm64 Artifact
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./${{ steps.info.outputs.arm64dir }}.tar.gz
+          asset_name: ${{ steps.info.outputs.arm64dir }}.tar.gz
+          asset_content_type: application/gzip
+      # armv6
+      - name: Create armv6 Directory
+        run: mkdir -p ${{ steps.info.outputs.armv6dir }}
+
+      - name: Download armv6 Artifacts
+        uses: actions/download-artifact@v2
+        with:
+          name: armv6
+          path: ${{ steps.info.outputs.armv6dir }}
+
+      - name: Create armv6 tarball
+        run: tar -zcvf ${{ steps.info.outputs.armv6dir }}.tar.gz ${{ steps.info.outputs.armv6dir }}
+
+      - name: Upload armv6 Artifact
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./${{ steps.info.outputs.armv6dir }}.tar.gz
+          asset_name: ${{ steps.info.outputs.armv6dir }}.tar.gz
+          asset_content_type: application/gzip
