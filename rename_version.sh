@@ -1,0 +1,9 @@
+VERSION=${GITHUB_REF##*/}
+MAJOR=${VERSION%%.*}
+MINOR=${VERSION%.*}
+MINOR=${MINOR#*.}
+PATCH=${VERSION##*.}
+echo "::set-output name=version::${VERSION}"
+echo "::set-output name=armv6dir::sqliteautoconf3390400_${MAJOR}.${MINOR}.${PATCH}_linux_armv6"
+echo "::set-output name=arm64dir::sqliteautoconf3390400_${MAJOR}.${MINOR}.${PATCH}_linux_arm64"
+echo "::set-output name=innerdir::sqliteautoconf3390400-${VERSION}"
